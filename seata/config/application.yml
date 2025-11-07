@@ -1,0 +1,67 @@
+server:
+  port: 8091
+
+spring:
+  application:
+    name: seata-server
+
+logging:
+  level:
+    io:
+      seata: info
+
+console:
+  user:
+    username: seata
+    password: seata
+
+seata:
+  # 注册中心配置
+  registry:
+    type: nacos
+    nacos:
+      application: seata-server
+      server-addr: pigx-nacos:8848
+      group: SEATA_GROUP
+      namespace: public
+      cluster: default
+      username: nacos
+      password: nacos
+
+  # 配置中心配置
+  config:
+    type: nacos
+    nacos:
+      server-addr: pigx-nacos:8848
+      group: SEATA_GROUP
+      namespace: public
+      username: nacos
+      password: nacos
+
+  # 存储模式
+  store:
+    mode: db
+    db:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://pigx-mysql:3306/seata?useUnicode=true&rewriteBatchedStatements=true&useSSL=false&allowPublicKeyRetrieval=true
+      user: root
+      password: root123456
+      min-conn: 10
+      max-conn: 100
+      global-table: global_table
+      branch-table: branch_table
+      lock-table: lock_table
+      distributed-lock-table: distributed_lock
+      query-limit: 1000
+      max-wait: 5000
+
+  # 服务配置
+  service:
+    vgroup-mapping:
+      my_tx_group: default
+    enable-degrade: false
+    disable-global-transaction: false
+
+  # 网络配置
+  server:
+    service-port: 8091

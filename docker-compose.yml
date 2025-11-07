@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: registry.cn-hangzhou.aliyuncs.com/dockerhub_mirror/mysql-server:8.0.32
+    container_name: pigx-mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据持久化
+      - mysql_data:/var/lib/mysql
+      # 配置文件
+      - ./config/mysql.cnf:/etc/mysql/conf.d/mysql.cnf:ro
+      # 日志目录
+      - mysql_logs:/var/log/mysql
+      # 初始化脚本
+      - ./init:/docker-entrypoint-initdb.d
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command: 
+      - '--character-set-server=utf8mb4'
+      - '--collation-server=utf8mb4_unicode_ci'
+      - '--sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+      - '--lower-case-table-names=1'
+      - '--default-authentication-plugin=mysql_native_password'
+    networks:
+      - pigx-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+
+  redis:
+    image: registry.cn-hangzhou.aliyuncs.com/dockerhub_mirror/redis
+    container_name: pigx-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      # 配置文件
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      # 数据持久化
+      - redis_data:/data
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - pigx-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+
+  nacos:
+    image: docker.xuanyuan.me/nacos/nacos-server:v3.0.0
+    container_name: pigx-nacos
+    restart: always
+    ports:
+      - "8848:8848"
+      - "8080:8080" 
+    volumes:
+      - ./nacos/config/application.properties:/home/nacos/conf/application.properties:ro
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: pigx-mysql
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_CACHE_ENABLE: "false"
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
+    networks:
+      - pigx-network
+    depends_on:
+      - mysql
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8848"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  seata:
+    image: registry.cn-hangzhou.aliyuncs.com/dockerhub_mirror/seata-server:2.0.0
+    container_name: pigx-seata
+    restart: always
+    ports:
+      - "8091:8091"
+      - "7091:7091"
+    volumes:
+      - ./seata/config/application.yml:/seata-server/resources/application.yml:ro
+    environment:
+      SEATA_PORT: 8091
+      STORE_MODE: db
+    networks:
+      - pigx-network
+    depends_on:
+      - nacos
+      - mysql
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8091"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  sentinel:
+    image: registry.cn-hangzhou.aliyuncs.com/dockerhub_mirror/sentinel-dashboard:1.8.4
+    container_name: pigx-sentinel
+    restart: always
+    ports:
+      - "8858:8858"
+    networks:
+      - pigx-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8858"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  rabbitmq:
+    image: docker.xuanyuan.me/library/rabbitmq:4-management
+    container_name: pigx-rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    networks:
+      - pigx-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+
+volumes:
+  mysql_data:
+    driver: local
+  mysql_logs:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  pigx-network:
+    driver: bridge
