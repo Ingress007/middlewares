@@ -51,7 +51,7 @@
 - 持久化设置 (AOF)
 - 内存限制和淘汰策略
 
-### Nacos 配置 (nacos/configig/application.properties)
+### Nacos 配置 (nacos/config/application.properties)
 
 主要配置项包括：
 - 数据库连接配置
